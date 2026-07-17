@@ -1,0 +1,64 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org">
+
+<body>
+
+	<nav th:fragment="navbar" class="navbar navbar-expand-lg navbar-dark bg-dark">
+
+		<div class="container-fluid">
+
+			<a class="navbar-brand fw-bold" href="/">
+				Expensight
+			</a>
+
+			<button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarNav">
+
+				<span class="navbar-toggler-icon"></span>
+
+			</button>
+
+			<div class="collapse navbar-collapse" id="navbarNav">
+
+				<ul class="navbar-nav ms-auto">
+
+					<li class="nav-item">
+						<a class="nav-link" href="/">
+							Dashboard
+						</a>
+					</li>
+
+					<li class="nav-item">
+						<a class="nav-link" href="/users-page">
+							Users
+						</a>
+					</li>
+
+					<li class="nav-item">
+						<a class="nav-link" href="/categories-page">
+							Categories
+						</a>
+					</li>
+
+					<li class="nav-item">
+						<a class="nav-link" href="/expenses-page">
+							Expenses
+						</a>
+					</li>
+
+					<li class="nav-item">
+						<a class="nav-link" href="/add-expense-page">
+							Add Expense
+						</a>
+					</li>
+
+				</ul>
+
+			</div>
+
+		</div>
+
+	</nav>
+
+</body>
+
+</html>

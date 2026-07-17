@@ -1,0 +1,148 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org">
+<head>
+    <title>Categories - Expensight</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="/css/style.css">
+</head>
+<body>
+<div th:replace="~{fragments/navbar :: navbar}"></div>
+
+<div class="container">
+    <div class="container-box">
+        <div class="d-flex justify-content-between align-items-center">
+            <h2>Categories</h2>
+            <div>
+                <button class="btn btn-primary" data-bs-toggle="modal" data-bs-target="#categoryModal">Add Category</button>
+                <a href="/" class="btn btn-secondary">Back</a>
+            </div>
+        </div>
+
+        <div id="alertPlaceholder" class="mt-3"></div>
+
+        <table class="table table-bordered table-hover mt-4">
+            <thead class="table-dark">
+                <tr>
+                    <th>ID</th>
+                    <th>Category Name</th>
+                    <th style="width:140px">Actions</th>
+                </tr>
+            </thead>
+            <tbody id="categoryTableBody"></tbody>
+        </table>
+
+        <nav id="paginationControls" style="display:none;">
+            <ul class="pagination justify-content-center">
+                <li class="page-item" id="prevPage"><button class="page-link">Previous</button></li>
+                <li class="page-item disabled"><span class="page-link" id="pageInfo">Page 1</span></li>
+                <li class="page-item" id="nextPage"><button class="page-link">Next</button></li>
+            </ul>
+        </nav>
+    </div>
+</div>
+
+<div class="modal fade" id="categoryModal" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="categoryModalTitle">Add Category</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <form id="categoryForm">
+                    <input type="hidden" id="categoryId">
+                    <div class="mb-3">
+                        <label class="form-label">Category Name</label>
+                        <input type="text" id="categoryName" class="form-control" required>
+                    </div>
+                </form>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                <button type="button" class="btn btn-primary" id="saveCategoryBtn">Save</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+    let currentPage = 0, totalPages = 1;
+
+    function showAlert(message, type) {
+        document.getElementById("alertPlaceholder").innerHTML =
+            '<div class="alert alert-' + type + ' alert-dismissible fade show">' + message + '<button type="button" class="btn-close" data-bs-dismiss="alert"></button></div>';
+    }
+
+    async function loadCategories() {
+        try {
+            const response = await fetch("/api/categories?page=" + currentPage + "&size=20");
+            if (!response.ok) { showAlert("Failed to load categories.", "danger"); return; }
+            const data = await response.json();
+            const tbody = document.getElementById("categoryTableBody");
+            tbody.innerHTML = "";
+            data.content.forEach(function(c) {
+                tbody.innerHTML += '<tr><td>' + c.id + '</td><td>' + c.name +
+                    '</td><td><button class="btn btn-sm btn-warning me-2" onclick="editCategory(' + c.id + ')">Edit</button>' +
+                    '<button class="btn btn-sm btn-danger" onclick="deleteCategory(' + c.id + ')">Delete</button></td></tr>';
+            });
+            totalPages = data.totalPages;
+            updatePagination();
+        } catch (e) { showAlert("Unable to connect to server.", "danger"); }
+    }
+
+    function updatePagination() {
+        var nav = document.getElementById("paginationControls");
+        if (totalPages <= 1) { nav.style.display = "none"; return; }
+        nav.style.display = "block";
+        document.getElementById("pageInfo").textContent = "Page " + (currentPage + 1) + " of " + totalPages;
+        document.getElementById("prevPage").className = "page-item" + (currentPage === 0 ? " disabled" : "");
+        document.getElementById("nextPage").className = "page-item" + (currentPage >= totalPages - 1 ? " disabled" : "");
+    }
+
+    document.getElementById("prevPage").addEventListener("click", function() { if (currentPage > 0) { currentPage--; loadCategories(); } });
+    document.getElementById("nextPage").addEventListener("click", function() { if (currentPage < totalPages - 1) { currentPage++; loadCategories(); } });
+
+    function openCategoryModal(title, cat) {
+        document.getElementById("categoryModalTitle").textContent = title;
+        document.getElementById("categoryId").value = cat ? cat.id : "";
+        document.getElementById("categoryName").value = cat ? cat.name : "";
+        new bootstrap.Modal(document.getElementById("categoryModal")).show();
+    }
+
+    function editCategory(id) {
+        fetch("/api/categories/" + id).then(function(r) { return r.json(); }).then(function(c) { openCategoryModal("Edit Category", c); });
+    }
+
+    document.getElementById("saveCategoryBtn").addEventListener("click", async function() {
+        var id = document.getElementById("categoryId").value;
+        var name = document.getElementById("categoryName").value.trim();
+        if (!name) { showAlert("Category name is required.", "warning"); return; }
+        var url = id ? "/api/categories/" + id : "/api/categories";
+        var method = id ? "PUT" : "POST";
+        try {
+            var response = await fetch(url, { method: method, headers: { "Content-Type": "application/json" }, body: JSON.stringify({ name: name }) });
+            if (response.ok) {
+                bootstrap.Modal.getInstance(document.getElementById("categoryModal")).hide();
+                showAlert(id ? "Category updated successfully." : "Category created successfully.", "success");
+                currentPage = 0;
+                loadCategories();
+            } else {
+                var err = await response.json();
+                showAlert(err.message || "Operation failed.", "danger");
+            }
+        } catch (e) { showAlert("Unable to connect to server.", "danger"); }
+    });
+
+    function deleteCategory(id) {
+        if (!confirm("Are you sure you want to delete category " + id + "?")) return;
+        fetch("/api/categories/" + id, { method: "DELETE" }).then(function(r) {
+            if (r.ok) { showAlert("Category deleted successfully.", "success"); loadCategories(); }
+            else { r.json().then(function(err) { showAlert(err.message || "Delete failed.", "danger"); }); }
+        }).catch(function() { showAlert("Unable to connect to server.", "danger"); });
+    }
+
+    loadCategories();
+</script>
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
+</body>
+</html>
