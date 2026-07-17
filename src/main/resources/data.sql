@@ -1,0 +1,2 @@
+-- Seed data is initialized programmatically by DataInitializer
+-- to ensure passwords are properly hashed with BCrypt.
