@@ -1,0 +1,170 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org">
+<head>
+    <title>Users - Expensight</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="/css/style.css">
+</head>
+<body>
+<div th:replace="~{fragments/navbar :: navbar}"></div>
+
+<div class="container">
+    <div class="container-box">
+        <div class="d-flex justify-content-between align-items-center">
+            <h2>Users</h2>
+            <div>
+                <button class="btn btn-primary" data-bs-toggle="modal" data-bs-target="#userModal">Add User</button>
+                <a href="/" class="btn btn-secondary">Back</a>
+            </div>
+        </div>
+
+        <div id="alertPlaceholder" class="mt-3"></div>
+
+        <table class="table table-bordered table-hover mt-4">
+            <thead class="table-dark">
+                <tr>
+                    <th>ID</th>
+                    <th>Name</th>
+                    <th>Email</th>
+                    <th style="width:140px">Actions</th>
+                </tr>
+            </thead>
+            <tbody id="userTableBody"></tbody>
+        </table>
+
+        <nav id="paginationControls" style="display:none;">
+            <ul class="pagination justify-content-center">
+                <li class="page-item" id="prevPage"><button class="page-link">Previous</button></li>
+                <li class="page-item disabled"><span class="page-link" id="pageInfo">Page 1</span></li>
+                <li class="page-item" id="nextPage"><button class="page-link">Next</button></li>
+            </ul>
+        </nav>
+    </div>
+</div>
+
+<div class="modal fade" id="userModal" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="userModalTitle">Add User</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <form id="userForm">
+                    <input type="hidden" id="userId">
+                    <div class="mb-3">
+                        <label class="form-label">Name</label>
+                        <input type="text" id="userName" class="form-control" required>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">Email</label>
+                        <input type="email" id="userEmail" class="form-control" required>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">Password</label>
+                        <input type="password" id="userPassword" class="form-control" required>
+                        <small class="text-muted">Required for new users. Leave blank to keep existing on edit.</small>
+                    </div>
+                </form>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                <button type="button" class="btn btn-primary" id="saveUserBtn">Save</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+    let currentPage = 0, totalPages = 1;
+
+    function showAlert(message, type) {
+        const el = document.getElementById("alertPlaceholder");
+        el.innerHTML = '<div class="alert alert-' + type + ' alert-dismissible fade show">' + message + '<button type="button" class="btn-close" data-bs-dismiss="alert"></button></div>';
+    }
+
+    async function loadUsers() {
+        try {
+            const response = await fetch("/api/users?page=" + currentPage + "&size=20");
+            if (!response.ok) { showAlert("Failed to load users.", "danger"); return; }
+            const data = await response.json();
+            const tbody = document.getElementById("userTableBody");
+            tbody.innerHTML = "";
+            data.content.forEach(function(user) {
+                tbody.innerHTML += '<tr><td>' + user.id + '</td><td>' + user.name + '</td><td>' + user.email +
+                    '</td><td><button class="btn btn-sm btn-warning me-2" onclick="editUser(' + user.id + ')">Edit</button>' +
+                    '<button class="btn btn-sm btn-danger" onclick="deleteUser(' + user.id + ')">Delete</button></td></tr>';
+            });
+            totalPages = data.totalPages;
+            updatePagination();
+        } catch (e) { showAlert("Unable to connect to server.", "danger"); }
+    }
+
+    function updatePagination() {
+        var nav = document.getElementById("paginationControls");
+        if (totalPages <= 1) { nav.style.display = "none"; return; }
+        nav.style.display = "block";
+        document.getElementById("pageInfo").textContent = "Page " + (currentPage + 1) + " of " + totalPages;
+        document.getElementById("prevPage").className = "page-item" + (currentPage === 0 ? " disabled" : "");
+        document.getElementById("nextPage").className = "page-item" + (currentPage >= totalPages - 1 ? " disabled" : "");
+    }
+
+    document.getElementById("prevPage").addEventListener("click", function() { if (currentPage > 0) { currentPage--; loadUsers(); } });
+    document.getElementById("nextPage").addEventListener("click", function() { if (currentPage < totalPages - 1) { currentPage++; loadUsers(); } });
+
+    function openUserModal(title, user) {
+        document.getElementById("userModalTitle").textContent = title;
+        document.getElementById("userId").value = user ? user.id : "";
+        document.getElementById("userName").value = user ? user.name : "";
+        document.getElementById("userEmail").value = user ? user.email : "";
+        document.getElementById("userPassword").value = "";
+        document.getElementById("userPassword").required = !user;
+        new bootstrap.Modal(document.getElementById("userModal")).show();
+    }
+
+    function editUser(id) {
+        fetch("/api/users/" + id).then(function(r) { return r.json(); }).then(function(u) {
+            openUserModal("Edit User", u);
+        });
+    }
+
+    document.getElementById("saveUserBtn").addEventListener("click", async function() {
+        var id = document.getElementById("userId").value;
+        var name = document.getElementById("userName").value.trim();
+        var email = document.getElementById("userEmail").value.trim();
+        var password = document.getElementById("userPassword").value;
+        if (!name || !email) { showAlert("Name and email are required.", "warning"); return; }
+        if (!id && !password) { showAlert("Password is required for new users.", "warning"); return; }
+
+        var body = { name: name, email: email };
+        if (password) body.password = password;
+
+        var url = id ? "/api/users/" + id : "/api/users";
+        var method = id ? "PUT" : "POST";
+        try {
+            var response = await fetch(url, { method: method, headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
+            if (response.ok) {
+                bootstrap.Modal.getInstance(document.getElementById("userModal")).hide();
+                showAlert(id ? "User updated successfully." : "User created successfully.", "success");
+                currentPage = 0;
+                loadUsers();
+            } else {
+                var err = await response.json();
+                showAlert(err.message || "Operation failed.", "danger");
+            }
+        } catch (e) { showAlert("Unable to connect to server.", "danger"); }
+    });
+
+    function deleteUser(id) {
+        if (!confirm("Are you sure you want to delete user " + id + "?")) return;
+        fetch("/api/users/" + id, { method: "DELETE" }).then(function(r) {
+            if (r.ok) { showAlert("User deleted successfully.", "success"); loadUsers(); }
+            else { r.json().then(function(err) { showAlert(err.message || "Delete failed.", "danger"); }); }
+        }).catch(function() { showAlert("Unable to connect to server.", "danger"); });
+    }
+
+    loadUsers();
+</script>
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
+</body>
+</html>
